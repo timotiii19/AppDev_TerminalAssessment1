@@ -1,6 +1,6 @@
 <?php
 
-require __DIR__ . '/vendor/autoload.php'; // Composer autoloader
+require __DIR__ . '/vendor/autoload.php';
 session_start();
 require 'config.php';
 
@@ -64,7 +64,7 @@ $pdf->SetMargins(10, 10, 10);
 $pdf->AddPage();
 
 // --- Add Logo ---
-$logoPath = 'images/logo.png'; // make sure this exists
+$logoPath = 'images/logo.png';
 if (file_exists($logoPath)) {
     $pdf->Image($logoPath, 10, 10, 30);
 }
@@ -75,62 +75,81 @@ $pdf->Ln(5);
 
 // --- Optional Chart Image ---
 if (!empty($_POST['chart_image'])) {
-        $chartData = explode(',', $_POST['chart_image'])[1];
-        $chartData = base64_decode($chartData);
+    $chartData = explode(',', $_POST['chart_image'])[1];
+    $chartData = base64_decode($chartData);
 
-        $tmpFile = tempnam(sys_get_temp_dir(), 'chart') . '.jpg';
-        file_put_contents($tmpFile, $chartData);
+    $tmpFile = tempnam(sys_get_temp_dir(), 'chart') . '.jpg';
+    file_put_contents($tmpFile, $chartData);
 
-        if (file_exists($tmpFile)) {
-            $pdf->Image($tmpFile, 15, $pdf->GetY(), 180, 90, 'JPG'); // ✅ Use 'JPG' here
-            $pdf->Ln(100);
-            unlink($tmpFile);
-        } else {
+    if (file_exists($tmpFile)) {
+        $pdf->Image($tmpFile, 15, $pdf->GetY(), 180, 90, 'JPG');
+        $pdf->Ln(100);
+        unlink($tmpFile);
+    } else {
         $pdf->Cell(0, 10, 'Failed to load chart image.', 0, 1);
     }
 }
 
+// --- Build Dynamic Table ---
+$pdf->SetFont('helvetica', '', 10);
+$pdf->Ln(5);
 
+$cellWidths = [30, 40, 25, 15, 25, 30, 25]; // Adjust column widths
+$cellAligns = ['C', 'C', 'C', 'C', 'C', 'C', 'C']; // you can tweak this per your needsS
+$headers = ['Category', 'Description', 'Total Amount', 'Qty', 'Per Piece', 'Payment', 'Date'];
 
-// --- Build Table ---
-$pdf->SetFont('helvetica', '', 11);
-$html = '<table border="1" cellpadding="5">
-    <thead>
-        <tr style="background-color:#f2f2f2;">
-            <th><b>Category</b></th>
-            <th><b>Description</b></th>
-            <th><b>Total Amount</b></th>
-            <th><b>Quantity</b></th>
-            <th><b>Amount per Piece</b></th>
-            <th><b>Payment Method</b></th>
-            <th><b>Date</b></th>
-        </tr>
-    </thead>
-    <tbody>';
+// --- Table Header ---
+$pdf->SetFillColor(240, 240, 240); // Light gray background
+$pdf->SetTextColor(0);
+$pdf->SetFont('', 'B');
 
+foreach ($headers as $i => $header) {
+    $pdf->MultiCell($cellWidths[$i], 8, $header, 1, 'C', 1, 0, '', '', true); // Centered headers
+}
+$pdf->Ln();
+
+// --- Table Rows ---
+$pdf->SetFont('', '');
+$pdf->SetFillColor(255, 255, 255);
 $totalAmount = 0;
+
 foreach ($expenses as $row) {
+    $data = [
+        $row['category_name'],
+        $row['description'],
+        '$' . number_format($row['total_amount'], 2),
+        $row['quantity'],
+        '$' . number_format($row['amount_per_piece'], 2),
+        $row['payment_method'],
+        $row['purchase_date'],
+    ];
+
+    // Calculate the max height required by any cell in this row
+    $lineHeight = 6;
+    $maxHeight = 0;
+    foreach ($data as $i => $txt) {
+        $nbLines = $pdf->getNumLines($txt, $cellWidths[$i]);
+        $maxHeight = max($maxHeight, $nbLines * $lineHeight);
+    }
+
+    // Output the row with dynamic cell heights
+    foreach ($data as $i => $txt) {
+        $pdf->MultiCell($cellWidths[$i], $maxHeight, $txt, 1, $cellAligns[$i], 0, 0, '', '', true);
+    }
+
+    $pdf->Ln();
     $totalAmount += $row['total_amount'];
-    $html .= '<tr>
-        <td>' . htmlspecialchars($row['category_name']) . '</td>
-        <td>' . htmlspecialchars($row['description']) . '</td>
-        <td>$' . number_format($row['total_amount'], 2) . '</td>
-        <td>' . htmlspecialchars($row['quantity']) . '</td>
-        <td>$' . number_format($row['amount_per_piece'], 2) . '</td>
-        <td>' . htmlspecialchars($row['payment_method']) . '</td>
-        <td>' . htmlspecialchars($row['purchase_date']) . '</td>
-    </tr>';
 }
 
-$html .= '<tr style="background-color:#f9f9f9;">
-    <td colspan="2"><b>Total</b></td>
-    <td><b>$' . number_format($totalAmount, 2) . '</b></td>
-    <td colspan="4"></td>
-</tr>';
-
-$html .= '</tbody></table>';
-
-$pdf->writeHTML($html, true, false, true, false, '');
+// --- Total Row ---
+$pdf->SetFont('', 'B');
+$pdf->SetFillColor(249, 249, 249);
+$pdf->MultiCell($cellWidths[0] + $cellWidths[1], 8, 'Total', 1, 'R', 1, 0);
+$pdf->MultiCell($cellWidths[2], 8, '$' . number_format($totalAmount, 2), 1, 'R', 1, 0);
+for ($i = 3; $i < count($cellWidths); $i++) {
+    $pdf->MultiCell($cellWidths[$i], 8, '', 1, '', 1, 0);
+}
+$pdf->Ln();
 
 // --- Output PDF ---
 $pdf->Output('Expenses_Report.pdf', 'D');

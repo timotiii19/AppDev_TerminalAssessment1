@@ -4,7 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $host = 'localhost';  
-$dbname = 'expense_db'; 
+$dbname = 'expense_tracker'; 
 $username = 'root';  // Change this if you have a different MySQL username
 $password = '';  // Change this if you have a MySQL password
 
@@ -14,6 +14,8 @@ try {
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
+
+$conn = $pdo;
 
 if (!function_exists('checkAuth')) {
     function checkAuth() {

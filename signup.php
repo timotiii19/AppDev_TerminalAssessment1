@@ -17,21 +17,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         $password = password_hash($passwordRaw, PASSWORD_DEFAULT); // Hash password
 
-        // Check if username already exists
-        $checkStmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
-        $checkStmt->execute([$username]);
+        // Check if username or email already exists
+            $checkStmt = $pdo->prepare("SELECT * FROM users WHERE username = ? OR email = ?");
+            $checkStmt->execute([$username, $email]);
+            $existingUser = $checkStmt->fetch();
 
-        if ($checkStmt->fetch()) {
-            $error = "Username already taken!";
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
-            if ($stmt->execute([$username, $email, $password])) {
-                header("Location: login.php");
-                exit;
+            if ($existingUser) {
+                if ($existingUser['username'] === $username) {
+                    $error = "Username already taken!";
+                } elseif ($existingUser['email'] === $email) {
+                    $error = "Email already registered!";
+                }
             } else {
-                $error = "Registration failed!";
+                $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
+                if ($stmt->execute([$username, $email, $password])) {
+                    header("Location: login.php");
+                    exit;
+                } else {
+                    $error = "Registration failed!";
+                }
             }
-        }
+
     }
 }
 ?>
